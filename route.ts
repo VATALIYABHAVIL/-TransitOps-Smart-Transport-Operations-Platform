@@ -4,6 +4,8 @@ import { cookies } from 'next/headers'
 import { verifyToken, signToken } from '@/lib/auth'
 import * as bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
+import fs from 'fs'
+import pathModule from 'path'
 
 // =================================================================
 // GET ROUTE DISPATCHER
@@ -170,6 +172,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
         }))
         .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
 
+      const soon = new Date()
+      soon.setDate(soon.getDate() + 30)
+      const expiringDrivers = await prisma.driver.findMany({
+        where: {
+          licenseExpiry: {
+            lte: soon
+          }
+        },
+        orderBy: {
+          licenseExpiry: 'asc'
+        }
+      })
+
       return NextResponse.json({
         metrics: {
           activeVehicles,
@@ -184,7 +199,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
           totalExpense: parseFloat(totalExpense.toFixed(2)),
           avgFuelEfficiency: parseFloat(avgFuelEfficiency.toFixed(2)),
         },
-        charts: { expensePieData, modelBarData, trendData }
+        charts: { expensePieData, modelBarData, trendData },
+        expiringDrivers
       })
     }
 
@@ -472,6 +488,67 @@ export async function POST(request: Request, { params }: { params: Promise<{ pat
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const decoded = verifyToken(token)
     if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // 3a. DRIVERS - SEND LICENSE EXPIRY REMINDERS (api/drivers/reminders)
+    if (resource === 'drivers' && subResource === 'reminders') {
+      const { driverId } = await request.json().catch(() => ({}))
+      let driversToRemind: any[] = []
+      
+      if (driverId) {
+        const driver = await prisma.driver.findUnique({ where: { id: driverId } })
+        if (driver) driversToRemind.push(driver)
+      } else {
+        const soon = new Date()
+        soon.setDate(soon.getDate() + 30)
+        driversToRemind = await prisma.driver.findMany({
+          where: {
+            licenseExpiry: {
+              lte: soon
+            }
+          }
+        })
+      }
+
+      if (driversToRemind.length === 0) {
+        return NextResponse.json({ message: 'No drivers found requiring reminders.', sent: [] })
+      }
+
+      const logPath = pathModule.join(process.cwd(), 'reminders.log')
+      const timestamp = new Date().toISOString()
+      
+      const sentList = driversToRemind.map((d: any) => {
+        const isExpired = new Date(d.licenseExpiry) < new Date()
+        const subject = isExpired 
+          ? `CRITICAL ALERT: Your Transitops Driver License Has Expired!` 
+          : `REMINDER: Your Transitops Driver License is Expiring Soon`
+        
+        const mailBody = `
+=========================================
+EMAIL NOTIFICATION SENT
+Timestamp: ${timestamp}
+To: ${d.email} (${d.firstName} ${d.lastName})
+Subject: ${subject}
+-----------------------------------------
+Dear ${d.firstName},
+
+This is an automated operational alert from the Transitops Fleet Management center.
+
+Your driver's license (No: ${d.licenseNo}, Category: ${d.licenseCategory}) ${isExpired ? 'expired on' : 'is scheduled to expire on'} ${new Date(d.licenseExpiry).toLocaleDateString()}.
+
+${isExpired 
+  ? 'CRITICAL: You are currently flagged as ineligible for trip dispatches. Please renew your license immediately and contact your administrator to update your profile.' 
+  : 'Please ensure you submit your renewed license documents before the expiry date to avoid service disruptions.'}
+
+Best regards,
+Transitops Operations Team
+=========================================
+`
+        fs.appendFileSync(logPath, mailBody, 'utf-8')
+        return { id: d.id, name: `${d.firstName} ${d.lastName}`, email: d.email, status: 'Sent' }
+      })
+
+      return NextResponse.json({ message: `Successfully processed ${sentList.length} reminders.`, sent: sentList })
+    }
 
     // 4. DRIVERS - CREATE (api/drivers)
     if (resource === 'drivers') {
