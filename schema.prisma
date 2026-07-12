@@ -1,0 +1,111 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  name           String?
+  password       String
+  role           String   @default("OPERATOR") // ADMIN or OPERATOR
+  failedAttempts Int      @default(0)
+  isLocked       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Vehicle {
+  id             String           @id @default(uuid())
+  licensePlate   String           @unique
+  make           String
+  model          String
+  year           Int
+  status         String           @default("ACTIVE") // ACTIVE, MAINTENANCE, OUT_OF_SERVICE
+  type           String           // BUS, VAN, TRUCK, SEDAN
+  capacity       Int
+  fuelType       String           // DIESEL, PETROL, ELECTRIC, HYBRID
+  odometer       Float            @default(0.0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  trips          Trip[]
+  maintenanceLogs MaintenanceLog[]
+  fuelLogs       FuelLog[]
+}
+
+model Driver {
+  id           String   @id @default(uuid())
+  firstName    String
+  lastName     String
+  licenseNo    String   @unique
+  licenseExpiry DateTime
+  status       String   @default("AVAILABLE") // AVAILABLE, ON_TRIP, SUSPENDED
+  email        String   @unique
+  phone        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  trips        Trip[]
+}
+
+model Trip {
+  id             String      @id @default(uuid())
+  driverId       String
+  driver         Driver      @relation(fields: [driverId], references: [id])
+  vehicleId      String
+  vehicle        Vehicle     @relation(fields: [vehicleId], references: [id])
+  route          String
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  status         String      @default("SCHEDULED") // SCHEDULED, ACTIVE, COMPLETED, CANCELLED
+  distance       Float?      // in km
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  fuelLogs       FuelLog[]
+  expenseLogs    ExpenseLog[]
+}
+
+model MaintenanceLog {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  serviceType String   // OIL_CHANGE, TIRE_ROTATION, BRAKE_SERVICE, ENGINE_REPAIR, INSPECTION, OTHER
+  description String
+  cost        Float
+  startDate   DateTime
+  endDate     DateTime?
+  status      String   @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FuelLog {
+  id           String   @id @default(uuid())
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  tripId       String?
+  trip         Trip?    @relation(fields: [tripId], references: [id])
+  fillDate     DateTime
+  liters       Float
+  cost         Float
+  odometer     Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ExpenseLog {
+  id          String   @id @default(uuid())
+  tripId      String?
+  trip         Trip?    @relation(fields: [tripId], references: [id])
+  category    String   // TOLL, PARKING, FOOD, MAINTENANCE, OTHER
+  amount      Float
+  date        DateTime
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
