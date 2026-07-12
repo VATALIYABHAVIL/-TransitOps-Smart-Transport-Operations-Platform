@@ -1,12 +1,14 @@
 'use client'
 
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+
 import React, { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import Link from 'next/link'
 import {
   TrendingUp,
-  DollarSign,
   Truck,
   Users,
   Route,
@@ -21,18 +23,15 @@ import {
   Play,
   CheckCircle,
   Trash2,
-  Edit,
   Phone,
   Mail,
-  FileText,
-  Clock,
   Gauge,
   Navigation,
   Search,
-  ArrowRight,
-  Info,
-  ChevronRight,
-  Tag
+  IndianRupeeIcon,
+  ShieldAlert,
+  Printer,
+  Download
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -76,6 +75,28 @@ function DashboardView() {
   const [charts, setCharts] = useState<DashboardChartData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expiringDrivers, setExpiringDrivers] = useState<any[]>([])
+  const [reminderStatus, setReminderStatus] = useState<string | null>(null)
+
+  const handleSendReminder = async (driverId: string | null) => {
+    try {
+      setReminderStatus('sending')
+      const res = await fetch('/api/drivers/reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId })
+      })
+      if (!res.ok) throw new Error('Failed to send reminders')
+      const data = await res.json()
+      setReminderStatus('success')
+      alert(data.message)
+      setTimeout(() => setReminderStatus(null), 3000)
+    } catch (err: any) {
+      setReminderStatus('error')
+      alert('Error sending reminders: ' + err.message)
+      setTimeout(() => setReminderStatus(null), 3000)
+    }
+  }
 
   const fetchStats = async () => {
     try {
@@ -84,6 +105,7 @@ function DashboardView() {
       const data = await res.json()
       setMetrics(data.metrics)
       setCharts(data.charts)
+      setExpiringDrivers(data.expiringDrivers || [])
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -137,9 +159,9 @@ function DashboardView() {
           <div className="glass-panel p-5 rounded-2xl shadow-xl flex items-center justify-between relative overflow-hidden">
             <div className="space-y-2">
               <span className="text-[11px] font-bold text-zinc-555 uppercase tracking-wider block">Total Costs</span>
-              <span className="text-2xl font-black text-white">${metrics.totalExpense.toLocaleString()}</span>
+              <span className="text-2xl font-black text-white">₹{metrics.totalExpense.toLocaleString()}</span>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center"><DollarSign className="w-5 h-5 text-cyan-400" /></div>
+            <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center"><IndianRupeeIcon className="w-5 h-5 text-cyan-400" /></div>
           </div>
           <div className="glass-panel p-5 rounded-2xl shadow-xl flex items-center justify-between relative overflow-hidden">
             <div className="space-y-2">
@@ -188,8 +210,8 @@ function DashboardView() {
                 <AreaChart data={charts.trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="date" stroke="#52525b" strokeWidth={1} tickLine={false} />
@@ -204,7 +226,7 @@ function DashboardView() {
           <div className="glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-between">
             <div>
               <div className="flex items-center space-x-2 mb-2">
-                <DollarSign className="w-4 h-4 text-emerald-450" />
+                <IndianRupeeIcon className="w-4 h-4 text-emerald-450" />
                 <h2 className="text-base font-bold text-white">Expense Distribution</h2>
               </div>
               <p className="text-zinc-500 text-xs mb-6">Operating expenses broken down by category.</p>
@@ -230,7 +252,7 @@ function DashboardView() {
                 <div key={entry.name} className="flex items-center space-x-1.5 text-zinc-450 truncate">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                   <span className="truncate">{entry.name}:</span>
-                  <span className="font-bold text-zinc-350 ml-auto">${entry.value}</span>
+                  <span className="font-bold text-zinc-350 ml-auto">₹{entry.value}</span>
                 </div>
               ))}
             </div>
@@ -238,116 +260,19 @@ function DashboardView() {
         </div>
       )}
 
-      {/* Live Telemetry Map Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="glass-panel p-6 rounded-2xl lg:col-span-2 shadow-xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <Map className="w-4 h-4 text-cyan-400" />
-                <h2 className="text-base font-bold text-white">Live Fleet Telemetry Map</h2>
-              </div>
-              <span className="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Live Tracking</span>
-              </span>
-            </div>
-            <p className="text-zinc-500 text-xs mb-6">Real-time status of active trips and routes across regional hubs.</p>
-          </div>
-          
-          <div className="w-full h-[280px] bg-zinc-950/40 rounded-xl border border-zinc-850/60 overflow-hidden relative flex items-center justify-center p-4">
-            <svg viewBox="0 0 800 400" className="w-full h-full text-zinc-650 opacity-90" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="mapGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(6, 182, 212, 0.03)" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#mapGrid)" />
-              <path d="M 250,50 L 550,50 L 570,120 L 700,200 L 730,300 L 600,380 L 520,380 L 400,320 L 300,340 L 220,220 L 150,230 L 140,160 L 250,160 Z" fill="none" stroke="rgba(6, 182, 212, 0.12)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M 380,100 L 375,230" fill="none" stroke="#06b6d4" strokeWidth="2" strokeDasharray="5,5" style={{ strokeDasharray: '6 6', animation: 'dashMove 1s linear infinite' }} />
-              <path d="M 520,290 L 375,230" fill="none" stroke="rgba(99, 102, 241, 0.4)" strokeWidth="1.5" />
-              <path d="M 375,230 L 310,300" fill="none" stroke="rgba(99, 102, 241, 0.6)" strokeWidth="1.5" strokeDasharray="5,5" style={{ strokeDasharray: '6 6', animation: 'dashMove 1.5s linear infinite' }} />
-
-              <circle cx="380" cy="100" r="6" fill="#06b6d4" />
-              <text x="392" y="104" fill="#e2f1f5" fontSize="10" className="font-extrabold select-none">Dallas Hub</text>
-
-              <circle cx="375" cy="230" r="6" fill="#06b6d4" />
-              <text x="387" y="234" fill="#e2f1f5" fontSize="10" className="font-extrabold select-none">Austin Station</text>
-
-              <circle cx="520" cy="290" r="5" fill="#52525b" />
-              <text x="532" y="294" fill="#94aeb5" fontSize="10" className="font-bold select-none">Houston Terminal</text>
-
-              <circle cx="310" cy="300" r="5" fill="#52525b" />
-              <text x="250" y="315" fill="#94aeb5" fontSize="10" className="font-bold select-none">San Antonio Depot</text>
-
-              <g transform="translate(378, 150)">
-                <circle cx="0" cy="0" r="5" fill="#10b981" />
-                <circle cx="0" cy="0" r="9" fill="none" stroke="#10b981" strokeWidth="1" />
-                <rect x="8" y="-12" width="65" height="18" rx="4" fill="rgba(7, 10, 15, 0.85)" stroke="rgba(165, 243, 252, 0.15)" strokeWidth="1" />
-                <text x="12" y="0" fill="#10b981" fontSize="8" className="font-extrabold select-none">TX-101-BUS</text>
-              </g>
-
-              <g transform="translate(342, 265)">
-                <circle cx="0" cy="0" r="4" fill="#06b6d4" />
-                <rect x="8" y="-12" width="65" height="18" rx="4" fill="rgba(7, 10, 15, 0.85)" stroke="rgba(165, 243, 252, 0.15)" strokeWidth="1" />
-                <text x="12" y="0" fill="#06b6d4" fontSize="8" className="font-extrabold select-none">TX-202-VAN</text>
-              </g>
-            </svg>
-          </div>
-        </div>
-
-        <div className="glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-between">
-          <div>
-            <h2 className="text-base font-bold text-white mb-2">Live Operations Feed</h2>
-            <p className="text-zinc-500 text-xs mb-6">Real-time alerts and telemetry reports from the road.</p>
-          </div>
-          <div className="space-y-4 flex-1">
-            <div className="flex items-start space-x-3 text-xs">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0 animate-ping" />
-              <div>
-                <span className="block text-zinc-300 font-bold">Vehicle TX-101-BUS Dispatched</span>
-                <span className="block text-zinc-550 text-[10px] mt-0.5">{"Dallas Hub -> Austin Station • 4 mins ago"}</span>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 text-xs">
-              <div className="w-2 h-2 rounded-full bg-cyan-450 mt-1.5 shrink-0" />
-              <div>
-                <span className="block text-zinc-300 font-bold">Driver Sarah Connor Available</span>
-                <span className="block text-zinc-550 text-[10px] mt-0.5">Completed Delivery Loop A • 28 mins ago</span>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 text-xs">
-              <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-              <div>
-                <span className="block text-zinc-300 font-bold">Maintenance In Progress</span>
-                <span className="block text-zinc-550 text-[10px] mt-0.5">TX-303-TRK: Engine repair scheduled • 2 hours ago</span>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3 text-xs">
-              <div className="w-2 h-2 rounded-full bg-emerald-555 shrink-0" />
-              <div>
-                <span className="block text-zinc-300 font-bold">Database Sync Complete</span>
-                <span className="block text-zinc-550 text-[10px] mt-0.5">All 22 telemetry nodes active • 4 hours ago</span>
-              </div>
-            </div>
-          </div>
-          <div className="pt-4 border-t border-zinc-850/60 flex items-center justify-between text-[10px] text-zinc-555">
-            <span>Updates hourly</span>
-            <span className="text-cyan-400 font-bold hover:underline cursor-pointer">View Archives</span>
-          </div>
-        </div>
-      </div>
 
       {/* Secondary Dashboard Items */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {charts && charts.modelBarData.length > 0 && (
-          <div className="glass-panel p-6 rounded-2xl lg:col-span-2 shadow-xl">
-            <div className="flex items-center space-x-2 mb-2">
-              <Activity className="w-4 h-4 text-amber-400" />
-              <h2 className="text-base font-bold text-white">Fuel Economy by Vehicle Model</h2>
+        {charts && charts.modelBarData.length > 0 ? (
+          <div className="glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center space-x-2 mb-2">
+                <Activity className="w-4 h-4 text-amber-400" />
+                <h2 className="text-base font-bold text-white">Fuel Economy by Vehicle Model</h2>
+              </div>
+              <p className="text-zinc-500 text-xs mb-6">Average fuel economy in km/L computed from completed trip mileage.</p>
             </div>
-            <p className="text-zinc-500 text-xs mb-6">Average fuel economy in km/L computed from completed trip mileage.</p>
-            <div className="w-full h-[200px] text-xs">
+            <div className="w-full h-[180px] text-xs">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={charts.modelBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis dataKey="model" stroke="#52525b" tickLine={false} />
@@ -362,46 +287,112 @@ function DashboardView() {
               </ResponsiveContainer>
             </div>
           </div>
+        ) : (
+          <div className="glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-center items-center text-center">
+            <Activity className="w-10 h-10 text-zinc-650 mb-3" />
+            <span className="block text-sm font-semibold text-zinc-400">No Fleet Telemetry Data</span>
+            <span className="block text-[10px] text-zinc-555 mt-1">Complete a trip with distance to view model efficiency.</span>
+          </div>
         )}
 
-        <div className={`glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-between ${!charts?.modelBarData.length ? 'lg:col-span-3' : ''}`}>
+        <div className="glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-between">
           <div>
             <h2 className="text-base font-bold text-white mb-2">Quick Actions</h2>
             <p className="text-zinc-500 text-xs mb-6">Instantly dispatch vehicles or record operational costs.</p>
           </div>
-          <div className="space-y-3">
-            <Link href="/trips" className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 group transition-all">
+          <div className="space-y-3 flex-1 flex flex-col justify-center">
+            <Link href="/trips" className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 group transition-all">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-cyan-500/10 flex items-center justify-center"><Route className="w-4 h-4 text-cyan-400" /></div>
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center"><Route className="w-3.5 h-3.5 text-cyan-400" /></div>
                 <div>
-                  <span className="block text-sm font-semibold text-zinc-200">Dispatch Trip</span>
-                  <span className="block text-[10px] text-zinc-555">Assign drivers & route vehicles</span>
+                  <span className="block text-xs font-semibold text-zinc-200">Dispatch Trip</span>
+                  <span className="block text-[9px] text-zinc-555">Assign drivers & route vehicles</span>
                 </div>
               </div>
-              <Plus className="w-4 h-4 text-zinc-555 group-hover:text-white transition-colors" />
+              <Plus className="w-3.5 h-3.5 text-zinc-555 group-hover:text-white transition-colors" />
             </Link>
-            <Link href="/maintenance" className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 group transition-all">
+            <Link href="/maintenance" className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 group transition-all">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-rose-500/10 flex items-center justify-center"><Wrench className="w-4 h-4 text-rose-400" /></div>
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center"><Wrench className="w-3.5 h-3.5 text-rose-400" /></div>
                 <div>
-                  <span className="block text-sm font-semibold text-zinc-200">Schedule Service</span>
-                  <span className="block text-[10px] text-zinc-555">Book vehicle inspection & repairs</span>
+                  <span className="block text-xs font-semibold text-zinc-200">Schedule Service</span>
+                  <span className="block text-[9px] text-zinc-555">Book vehicle inspection & repairs</span>
                 </div>
               </div>
-              <Plus className="w-4 h-4 text-zinc-555 group-hover:text-white transition-colors" />
+              <Plus className="w-3.5 h-3.5 text-zinc-555 group-hover:text-white transition-colors" />
             </Link>
-            <Link href="/fuel-expenses" className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 group transition-all">
+            <Link href="/fuel-expenses" className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 group transition-all">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center"><Fuel className="w-4 h-4 text-amber-400" /></div>
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center"><Fuel className="w-3.5 h-3.5 text-amber-400" /></div>
                 <div>
-                  <span className="block text-sm font-semibold text-zinc-200">Log Fuel Fill-up</span>
-                  <span className="block text-[10px] text-zinc-555">Record liters, odometer & costs</span>
+                  <span className="block text-xs font-semibold text-zinc-200">Log Fuel Fill-up</span>
+                  <span className="block text-[9px] text-zinc-555">Record liters, odometer & costs</span>
                 </div>
               </div>
-              <Plus className="w-4 h-4 text-zinc-555 group-hover:text-white transition-colors" />
+              <Plus className="w-3.5 h-3.5 text-zinc-555 group-hover:text-white transition-colors" />
             </Link>
           </div>
-          <div className="mt-6 text-center text-[10px] text-zinc-555 font-medium">System uptime 100% • Network synchronized</div>
+          <div className="mt-4 text-center text-[9px] text-zinc-650 font-medium">Uptime 100% • Sync Active</div>
+        </div>
+
+        {/* License Expiration Alerts Widget */}
+        <div className="glass-panel p-6 rounded-2xl shadow-xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <ShieldAlert className="w-4 h-4 text-rose-400 animate-pulse" />
+                <h2 className="text-base font-bold text-white">License Expiration Alerts</h2>
+              </div>
+              {expiringDrivers.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-400 animate-pulse">
+                  {expiringDrivers.length} alerts
+                </span>
+              )}
+            </div>
+            <p className="text-zinc-500 text-xs mb-4">Drivers whose licenses are expired or expiring within 30 days.</p>
+          </div>
+
+          <div className="space-y-2 flex-1 overflow-y-auto max-h-[140px] pr-1 scrollbar-thin">
+            {expiringDrivers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-zinc-555 italic">
+                <CheckCircle className="w-6 h-6 text-emerald-500/40 mb-1" />
+                <p className="text-[10px]">All driver licenses are fully valid.</p>
+              </div>
+            ) : (
+              expiringDrivers.map((d: any) => {
+                const isExpired = new Date(d.licenseExpiry) < new Date()
+                return (
+                  <div key={d.id} className="flex items-center justify-between p-2 rounded-xl border border-zinc-800/80 bg-zinc-950/20 text-[10px]">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <span className="block font-semibold text-zinc-250 truncate">{d.firstName} {d.lastName}</span>
+                      <span className={`block text-[9px] ${isExpired ? 'text-rose-400 font-bold' : 'text-zinc-500'}`}>
+                        {isExpired ? 'Expired' : 'Expires'}: {new Date(d.licenseExpiry).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => handleSendReminder(d.id)}
+                      className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                        isExpired 
+                          ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20' 
+                          : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20'
+                      }`}
+                    >
+                      Remind
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {expiringDrivers.length > 0 && (
+            <button 
+              onClick={() => handleSendReminder(null)} 
+              className="w-full mt-4 py-2 bg-indigo-600/10 border border-indigo-500/20 hover:bg-indigo-500/20 text-indigo-400 font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5"
+            >
+              <span>Remind All Drivers</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -649,7 +640,7 @@ function VehiclesView() {
           <input type="text" placeholder="Search make, model, license..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500/60" />
         </div>
         <div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none focus:border-cyan-500/60">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 glass-select">
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">ACTIVE</option>
             <option value="MAINTENANCE">MAINTENANCE</option>
@@ -657,7 +648,7 @@ function VehiclesView() {
           </select>
         </div>
         <div>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none focus:border-cyan-500/60">
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 glass-select">
             <option value="ALL">All Vehicle Types</option>
             <option value="BUS">BUS</option>
             <option value="VAN">VAN</option>
@@ -699,8 +690,8 @@ function VehiclesView() {
 
       {/* Detail Modal */}
       {selectedVehicleId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="glass-panel w-full max-w-4xl rounded-3xl max-h-[90vh] overflow-y-auto flex flex-col border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-4xl rounded-3xl max-h-[90vh] overflow-y-auto flex flex-col border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-white">{loadingDetail ? 'Loading details...' : `${vehicleDetail?.make} ${vehicleDetail?.model}`}</h2>
@@ -739,7 +730,7 @@ function VehiclesView() {
                             <p className="text-zinc-500 text-[10px] mt-0.5">{log.description}</p>
                           </div>
                           <div className="text-right">
-                            <span className="font-bold text-white">${log.cost}</span>
+                            <span className="font-bold text-white">₹{log.cost}</span>
                             <span className="block text-[10px] text-zinc-555 mt-0.5">{new Date(log.startDate).toLocaleDateString()}</span>
                           </div>
                         </div>
@@ -761,8 +752,8 @@ function VehiclesView() {
 
       {/* Create Modal */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Register New Vehicle</h2>
               <button onClick={() => setIsCreateOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -824,8 +815,8 @@ function VehiclesView() {
 
       {/* Edit Modal */}
       {isEditOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Edit Vehicle</h2>
               <button onClick={() => setIsEditOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -1109,7 +1100,7 @@ function DriversView() {
           <input type="text" placeholder="Search name, email, license number..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500/60" />
         </div>
         <div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none focus:border-cyan-500/60">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 glass-select">
             <option value="ALL">All Statuses</option>
             <option value="AVAILABLE">AVAILABLE</option>
             <option value="ON_TRIP">ON TRIP</option>
@@ -1153,8 +1144,8 @@ function DriversView() {
 
       {/* Driver Detail Modal */}
       {selectedDriverId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-4xl rounded-3xl max-h-[90vh] overflow-y-auto flex flex-col border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-4xl rounded-3xl max-h-[90vh] overflow-y-auto flex flex-col border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-white">{loadingDetail ? 'Loading Details...' : `${driverDetail?.firstName} ${driverDetail?.lastName}`}</h2>
@@ -1206,8 +1197,8 @@ function DriversView() {
 
       {/* Create Modal */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Add New Driver Profile</h2>
               <button onClick={() => setIsCreateOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -1217,17 +1208,17 @@ function DriversView() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">First Name</label>
-                  <input type="text" required placeholder="David" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
+                  <input type="text" required placeholder="Ex. Rahul" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
                   <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Last Name</label>
-                  <input type="text" required placeholder="Miller" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
+                  <input type="text" required placeholder="Ex. Shah" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">License Number</label>
-                  <input type="text" required placeholder="DL-9876543" value={formData.licenseNo} onChange={(e) => setFormData({ ...formData, licenseNo: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
+                  <input type="text" required placeholder="GJ0320240001234" value={formData.licenseNo} onChange={(e) => setFormData({ ...formData, licenseNo: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
                   <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">License Expiry Date</label>
@@ -1237,11 +1228,11 @@ function DriversView() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Email Address</label>
-                  <input type="email" required placeholder="david.miller@transitops.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
+                  <input type="email" required placeholder="[EMAIL_ADDRESS]" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
                   <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Phone Number</label>
-                  <input type="text" required placeholder="+1-555-0199" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
+                  <input type="text" required placeholder="+917383783833" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
               </div>
               <button type="submit" disabled={formSubmitting} className="w-full py-3 bg-cyan-600 hover:bg-cyan-550 text-white font-semibold rounded-xl text-sm transition-all">{formSubmitting ? 'Saving Profile...' : 'Save Driver Profile'}</button>
@@ -1252,8 +1243,8 @@ function DriversView() {
 
       {/* Edit Modal */}
       {isEditOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Edit Driver Profile</h2>
               <button onClick={() => setIsEditOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -1638,11 +1629,10 @@ function TripsView() {
                 </div>
               </div>
               {selectedVehicle && (
-                <div className={`p-3 rounded-xl border flex items-start space-x-2.5 transition-all duration-300 ${
-                  isCapacityExceeded 
-                    ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' 
-                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-455'
-                }`}>
+                <div className={`p-3 rounded-xl border flex items-start space-x-2.5 transition-all duration-300 ${isCapacityExceeded
+                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-455'
+                  }`}>
                   {isCapacityExceeded ? (
                     <>
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -1681,11 +1671,10 @@ function TripsView() {
                   <input type="datetime-local" required value={scheduledEnd} onChange={(e) => setScheduledEnd(e.target.value)} className="w-full px-3 py-2 rounded-xl glass-input text-sm text-zinc-300" />
                 </div>
               </div>
-              <button type="submit" disabled={formSubmitting || isCapacityExceeded} className={`w-full py-3 font-semibold rounded-xl text-sm transition-all shadow-md ${
-                isCapacityExceeded 
-                  ? 'bg-zinc-800 text-zinc-555 cursor-not-allowed border border-zinc-755' 
-                  : 'bg-cyan-600 hover:bg-cyan-550 text-white shadow-cyan-500/15'
-              }`}>{formSubmitting ? 'Creating Dispatch...' : 'Dispatch Trip'}</button>
+              <button type="submit" disabled={formSubmitting || isCapacityExceeded} className={`w-full py-3 font-semibold rounded-xl text-sm transition-all shadow-md ${isCapacityExceeded
+                ? 'bg-zinc-800 text-zinc-555 cursor-not-allowed border border-zinc-755'
+                : 'bg-cyan-600 hover:bg-cyan-550 text-white shadow-cyan-500/15'
+                }`}>{formSubmitting ? 'Creating Dispatch...' : 'Dispatch Trip'}</button>
             </form>
           </div>
         </div>
@@ -1698,7 +1687,7 @@ function TripsView() {
               <input type="text" placeholder="Search route, driver, plate..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500/60" />
             </div>
             <div>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none focus:border-cyan-500/60">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-xl text-sm text-zinc-300 glass-select">
                 <option value="ALL">All Trip Statuses</option>
                 <option value="SCHEDULED">SCHEDULED</option>
                 <option value="ACTIVE">DISPATCHED (ACTIVE)</option>
@@ -1724,11 +1713,10 @@ function TripsView() {
                 const routeInfo = parseRoute(trip.route)
                 const isSelected = selectedTrip?.id === trip.id
                 return (
-                  <div key={trip.id} onClick={() => setSelectedTrip(trip)} className={`glass-panel p-5 rounded-2xl border cursor-pointer group transition-all duration-300 relative flex flex-col justify-between ${
-                    isSelected 
-                      ? 'bg-zinc-900/60 border-cyan-500/40 shadow-lg shadow-cyan-500/5' 
-                      : 'border-zinc-800/80 hover:border-zinc-700/80'
-                  }`}>
+                  <div key={trip.id} onClick={() => setSelectedTrip(trip)} className={`glass-panel p-5 rounded-2xl border cursor-pointer group transition-all duration-300 relative flex flex-col justify-between ${isSelected
+                    ? 'bg-zinc-900/60 border-cyan-500/40 shadow-lg shadow-cyan-500/5'
+                    : 'border-zinc-800/80 hover:border-zinc-700/80'
+                    }`}>
                     <div>
                       <div className="flex justify-between items-start mb-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase border ${statusConfig.bg}`}>{statusConfig.label}</span>
@@ -1798,8 +1786,8 @@ function TripsView() {
 
       {/* Complete Run Modal */}
       {isCompleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-md rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-md rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Log Trip Mileage</h2>
               <button onClick={() => setIsCompleteOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -2020,7 +2008,7 @@ function MaintenanceView() {
               </div>
               <div className="grid grid-cols-2 gap-6 text-xs text-zinc-400 border-t md:border-t-0 md:border-l border-zinc-850 pt-4 md:pt-0 md:pl-6 shrink-0 min-w-[260px]">
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between"><span className="text-zinc-555">Service Cost:</span><span className="font-bold text-white">${log.cost.toLocaleString()}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-zinc-555">Service Cost:</span><span className="font-bold text-white">₹{log.cost.toLocaleString()}</span></div>
                   <div className="flex items-center justify-between"><span className="text-zinc-555">Start Date:</span><span className="text-zinc-300 font-semibold">{new Date(log.startDate).toLocaleDateString()}</span></div>
                   <div className="flex items-center justify-between"><span className="text-zinc-555">Completion:</span><span className="text-zinc-300 font-semibold">{log.endDate ? new Date(log.endDate).toLocaleDateString() : 'Ongoing'}</span></div>
                 </div>
@@ -2043,8 +2031,8 @@ function MaintenanceView() {
 
       {/* Create Modal */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Schedule Vehicle Service</h2>
               <button onClick={() => setIsCreateOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -2075,7 +2063,7 @@ function MaintenanceView() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Estimated Cost ($)</label>
+                  <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Estimated Cost (₹)</label>
                   <input type="number" required min="0" value={formData.cost} onChange={(e) => setFormData({ ...formData, cost: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
@@ -2297,7 +2285,7 @@ function FuelExpensesView() {
         <div className="flex flex-wrap gap-3">
           <button onClick={handleDownloadCSV} className="px-4 py-2.5 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 text-zinc-350 hover:text-white transition-all text-xs font-semibold">Export CSV</button>
           <button onClick={() => setIsFuelOpen(true)} className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-550 text-white font-semibold text-xs transition-all shadow-lg"><Fuel className="w-4 h-4" /><span>Log Fuel</span></button>
-          <button onClick={() => setIsExpenseOpen(true)} className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-555 text-white font-semibold text-xs transition-all shadow-lg"><DollarSign className="w-4 h-4" /><span>Log Expense</span></button>
+          <button onClick={() => setIsExpenseOpen(true)} className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-555 text-white font-semibold text-xs transition-all shadow-lg"><IndianRupeeIcon className="w-4 h-4" /><span>Log Expense</span></button>
         </div>
       </div>
 
@@ -2336,8 +2324,8 @@ function FuelExpensesView() {
                     <td className="p-4 flex items-center space-x-2"><Calendar className="w-4 h-4 text-cyan-400/80" /><span>{new Date(log.fillDate).toLocaleDateString()}</span></td>
                     <td className="p-4 font-bold text-white">{log.vehicle.licensePlate}</td>
                     <td className="p-4">{log.liters} L</td>
-                    <td className="p-4 font-semibold text-white">${log.cost.toFixed(2)}</td>
-                    <td className="p-4 text-zinc-500">${(log.cost / log.liters).toFixed(2)} / L</td>
+                    <td className="p-4 font-semibold text-white">₹{log.cost.toFixed(2)}</td>
+                    <td className="p-4 text-zinc-500">₹{(log.cost / log.liters).toFixed(2)} / L</td>
                     <td className="p-4">{log.odometer.toLocaleString()} km</td>
                     <td className="p-4 text-zinc-500 truncate max-w-xs">{log.trip ? log.trip.route : 'N/A'}</td>
                   </tr>
@@ -2349,7 +2337,7 @@ function FuelExpensesView() {
       ) : (
         expenseLogs.length === 0 ? (
           <div className="text-center p-12 glass-panel rounded-2xl text-zinc-500 max-w-md mx-auto">
-            <DollarSign className="w-12 h-12 mx-auto mb-4 text-zinc-650" />
+            <IndianRupeeIcon className="w-12 h-12 mx-auto mb-4 text-zinc-650" />
             <p className="font-bold text-zinc-400">No Expenses Recorded</p>
           </div>
         ) : (
@@ -2370,7 +2358,7 @@ function FuelExpensesView() {
                   <tr key={log.id} className="border-b border-zinc-850/60 text-zinc-300">
                     <td className="p-4 flex items-center space-x-2"><Calendar className="w-4 h-4 text-cyan-400/80" /><span>{new Date(log.date).toLocaleDateString()}</span></td>
                     <td className="p-4"><span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase border ${getCategoryColor(log.category)}`}>{log.category}</span></td>
-                    <td className="p-4 font-bold text-white">${log.amount.toFixed(2)}</td>
+                    <td className="p-4 font-bold text-white">₹{log.amount.toFixed(2)}</td>
                     <td className="p-4 text-zinc-300">{log.description}</td>
                     <td className="p-4 font-semibold text-zinc-500">{log.trip ? log.trip.vehicle.licensePlate : 'N/A'}</td>
                     <td className="p-4 text-zinc-500 truncate max-w-xs">{log.trip ? log.trip.route : 'N/A'}</td>
@@ -2384,8 +2372,8 @@ function FuelExpensesView() {
 
       {/* Log Fuel Modal */}
       {isFuelOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Log Fuel Fill-up</h2>
               <button onClick={() => setIsFuelOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -2418,7 +2406,7 @@ function FuelExpensesView() {
                   <input type="number" required min="0.1" step="0.1" value={fuelFormData.liters} onChange={(e) => setFuelFormData({ ...fuelFormData, liters: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
-                  <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Total Invoice ($)</label>
+                  <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Total Invoice (₹)</label>
                   <input type="number" required min="0.01" step="0.01" value={fuelFormData.cost} onChange={(e) => setFuelFormData({ ...fuelFormData, cost: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
@@ -2438,8 +2426,8 @@ function FuelExpensesView() {
 
       {/* Log Expense Modal */}
       {isExpenseOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-backdrop-in">
+          <div className="glass-panel animate-modal-in w-full max-w-lg rounded-3xl shadow-2xl border border-zinc-800">
             <div className="p-6 border-b border-zinc-850 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Log Operating Expense</h2>
               <button onClick={() => setIsExpenseOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 text-zinc-400"><X className="w-4 h-4" /></button>
@@ -2469,7 +2457,7 @@ function FuelExpensesView() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Amount ($)</label>
+                  <label className="block text-zinc-555 font-bold uppercase tracking-wider mb-2">Amount (₹)</label>
                   <input type="number" required min="0.01" step="0.01" value={expenseFormData.amount} onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: e.target.value })} className="w-full px-4 py-2.5 rounded-xl glass-input text-sm" />
                 </div>
                 <div>
@@ -2493,6 +2481,231 @@ function FuelExpensesView() {
 // =================================================================
 // MAIN COMBINED DASHBOARD PAGE COMPONENT
 // =================================================================
+
+// =================================================================
+// 7. REPORTS & EXPORT HUB VIEW
+// =================================================================
+function ReportsView() {
+  const [stats, setStats] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+
+  const fetchReportStats = async () => {
+    try {
+      const res = await fetch('/api/dashboard/stats')
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchReportStats()
+  }, [])
+
+  const handlePDFExport = async () => {
+    setExporting(true)
+    const element = document.getElementById('report-document')
+    if (!element) return
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#09090b',
+      })
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgWidth = 210
+      const pageHeight = 297
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+      pdf.save(`Transitops_Operational_Report_${new Date().toISOString().split('T')[0]}.pdf`)
+    } catch (err) {
+      console.error('PDF export failed:', err)
+      alert('Failed to generate PDF. Check console for details.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-64 w-full items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div>
+          <p className="text-zinc-450 text-xs">Compiling analytics report...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+        <div>
+          <h1 className="text-3xl font-black bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Reports & Export Hub</h1>
+          <p className="text-zinc-450 text-sm mt-1">Generate print-ready executive summaries and download operational analytics.</p>
+        </div>
+        <button
+          onClick={handlePDFExport}
+          disabled={exporting}
+          className="flex items-center space-x-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-500/10 active:scale-[0.98] disabled:opacity-50"
+        >
+          <Download className="w-4 h-4 animate-bounce" />
+          <span>{exporting ? 'Generating PDF...' : 'Export PDF Report'}</span>
+        </button>
+      </div>
+
+      {/* Printable Document */}
+      <div id="report-document" className="glass-panel p-8 md:p-12 rounded-3xl border border-zinc-800 bg-zinc-950 text-white space-y-8 max-w-5xl mx-auto shadow-2xl">
+        <div className="flex justify-between items-start border-b border-zinc-850 pb-6">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center font-black text-xs text-white">T</div>
+              <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Transitops</span>
+            </div>
+            <h2 className="text-2xl font-black text-white">Executive Operations Report</h2>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mt-1">Fleet Telemetry, Costs, and Logistics Audit</p>
+          </div>
+          <div className="text-right text-xs text-zinc-450 space-y-1">
+            <p><span className="text-zinc-555 font-bold">Report Date:</span> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p><span className="text-zinc-555 font-bold">Status:</span> Generated Online</p>
+          </div>
+        </div>
+
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-850">
+            <span className="block text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Total Operations Cost</span>
+            <span className="block text-xl font-black text-white mt-1">₹{stats?.metrics.totalExpense.toLocaleString()}</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-850">
+            <span className="block text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Fleet Size (Active)</span>
+            <span className="block text-xl font-black text-white mt-1">{stats?.metrics.activeVehicles} <span className="text-xs text-zinc-500">vehicles</span></span>
+          </div>
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-850">
+            <span className="block text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Dispatched Runs</span>
+            <span className="block text-xl font-black text-white mt-1">{stats?.metrics.activeTrips} <span className="text-xs text-zinc-500">active</span></span>
+          </div>
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-850">
+            <span className="block text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Avg Fuel Efficiency</span>
+            <span className="block text-xl font-black text-white mt-1">{stats?.metrics.avgFuelEfficiency.toFixed(2)} <span className="text-xs text-zinc-500">km/L</span></span>
+          </div>
+        </div>
+
+        {/* Visual Analytics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          <div className="p-6 rounded-2xl bg-zinc-900/40 border border-zinc-850">
+            <span className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-4">Cost Distribution Breakdown</span>
+            <div className="w-full h-[200px] flex items-center justify-center text-xs">
+              {stats?.charts.expensePieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={stats.charts.expensePieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={4} dataKey="value">
+                      {stats.charts.expensePieData.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: '#18181b', borderColor: '#27272a', borderRadius: '12px', color: '#fff' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <span className="text-zinc-555 italic">No data recorded.</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-4 text-[9px] border-t border-zinc-850/60 pt-4">
+              {stats?.charts.expensePieData.map((entry: any, index: number) => (
+                <div key={entry.name} className="flex items-center space-x-1.5 text-zinc-400">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span>{entry.name}: <span className="font-bold text-white">₹{entry.value}</span></span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-zinc-900/40 border border-zinc-850 flex flex-col justify-between">
+            <div>
+              <span className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-4">Historical Cost Trend</span>
+            </div>
+            <div className="w-full h-[200px] text-xs">
+              {stats?.charts.trendData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={stats.charts.trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="date" stroke="#52525b" strokeWidth={1} tickLine={false} />
+                    <YAxis stroke="#52525b" strokeWidth={1} tickLine={false} />
+                    <Tooltip contentStyle={{ background: '#18181b', borderColor: '#27272a', borderRadius: '12px', color: '#fff' }} />
+                    <Area type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={2} fill="rgba(99, 102, 241, 0.1)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <span className="text-zinc-555 italic">No data recorded.</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* License Expiry Section */}
+        <div className="pt-4 space-y-3">
+          <span className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Driver License Status Log</span>
+          <div className="overflow-x-auto border border-zinc-850 rounded-2xl">
+            <table className="w-full border-collapse text-left text-xs text-zinc-300">
+              <thead>
+                <tr className="bg-zinc-900 border-b border-zinc-850 text-zinc-500 font-bold">
+                  <th className="p-3">Driver Name</th>
+                  <th className="p-3">License Number</th>
+                  <th className="p-3">Email Address</th>
+                  <th className="p-3 text-right">License Expiry Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.expiringDrivers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-zinc-555 italic">All active fleet driver licenses are current and valid.</td>
+                  </tr>
+                ) : (
+                  stats?.expiringDrivers.map((d: any) => {
+                    const isExpired = new Date(d.licenseExpiry) < new Date()
+                    return (
+                      <tr key={d.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20">
+                        <td className="p-3 font-semibold text-white">{d.firstName} {d.lastName}</td>
+                        <td className="p-3 font-mono">{d.licenseNo}</td>
+                        <td className="p-3 text-zinc-400">{d.email}</td>
+                        <td className={`p-3 text-right font-semibold ${isExpired ? 'text-rose-400' : 'text-amber-400'}`}>
+                          {new Date(d.licenseExpiry).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="text-center text-[9px] text-zinc-650 pt-8 border-t border-zinc-850">
+          This report is generated dynamically by the Transitops Logistics Console. All data values correspond to local SQLite ledger transactions.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ConsolidatedConsolePage() {
   const { user } = useAuth()
   const params = useParams()
@@ -2513,6 +2726,8 @@ export default function ConsolidatedConsolePage() {
       return <MaintenanceView />
     case 'fuel-expenses':
       return <FuelExpensesView />
+    case 'reports':
+      return <ReportsView />
     default:
       return <DashboardView />
   }
